@@ -168,14 +168,18 @@ interface ──► application ──► domain
 
 Sem porta `IdempotencyStore` (a idempotência vive dentro do `WagerTransactionRepository`); o lançamento é persistido atomicamente com a wallet via `UnitOfWork`. Cada porta deve ser **profunda**: interface pequena escondendo o comportamento real.
 
+> **Nota de build (não é decisão de arquitetura):** o map lista 7 portas; a build adicionou uma 8ª, `InboxRepository` (`record`/`exists`), porque a atomicidade do inbox (§11) exige um seam de persistência próprio — a dedup por `(consumer_name, message_id)` precisa de INSERT no mesmo tx, e nenhuma das 7 portas cobre isso. A idempotência de *chave* continua no `WagerTransactionRepository`; o inbox é dedup de *mensagem*.
+
 ## 10. Trade-offs e limitações
 
 - **Lock pessimista vs throughput**: operações da *mesma* wallet serializam por construção. É o comportamento exigido (§8), não uma deficiência; o custo é throughput por wallet quente. Wallets diferentes não são afetadas.
 - **`numeric(20,2)` arredonda (não rejeita)** um valor com mais de 2 casas no INSERT; a rejeição estrita de >2 casas fica em `Money.from` (aplicação), e a coluna é o backstop.
 - **`big.js` tem `c`/`e`/`s` mutáveis e sem tipos embutidos**: neutralizado mantendo o `Big` privado em `Money` e usando `@types/big.js`.
 - **MiniStack não tem as 4 APIs de redrive de DLQ** (mover para fora): irrelevante para §10, que só move para dentro; trocar por LocalStack só se precisarmos de redrive explícito.
-- **MikroORM no Bun** não é plataforma de primeira classe (é Node-first): verificar com um spike na build; não é fator decisivo pois Bun é a stack obrigatória (§4).
+- **MikroORM no Bun** não é plataforma de primeira classe (é Node-first): verificado na build — funciona com a API de decorators da **v6** (a v7 removeu os decorators `@Entity`/`@Property`, então a build fixou `@mikro-orm/*@^6`). Não é fator decisivo pois Bun é a stack obrigatória (§4).
 - **Constantes de tuning** (`maxReceiveCount` ~5, visibility ~30 s, teto de tentativas do outbox, lock timeout) são valores de build, não decisões de arquitetura.
+- **FKs deferíveis**: as FKs `wallet_id`/`transaction_id` são `DEFERRABLE INITIALLY DEFERRED` para permitir o flush do MikroORM em qualquer ordem dentro do tx (o MikroORM sem relações declaradas não ordena os INSERTs); a checagem acontece no COMMIT, preservando a atomicidade de §11.
+- **Ordem do lock e da idempotência**: no `SubmitTransaction` o `SELECT … FOR UPDATE` da wallet vem **antes** do check de idempotência — assim requisições com a mesma chave serializam no lock da wallet e a dedup é race-safe sob redelivery concorrente.
 
 ## 11. Fora de escopo
 

@@ -744,3 +744,9 @@ wallet.balance == saldo reconstruído pelo ledger
 ### Diferenciais opcionais
 
 Teste de carga também conta como diferencial. Se fizer, exponha como `bun run test:load` e registre ambiente, metodologia, throughput, p50/p95/p99, taxa de erro, conflitos de concorrência e outbox lag. Não há meta de RPS — a qualidade do experimento e a honestidade da análise pesam mais que o número bruto.
+
+---
+
+## Executando a solução
+
+Setup, comandos de execução, migrações e testes: ver [`docs/running.md`](docs/running.md). Decisões de arquitetura: [`ARCHITECTURE.md`](ARCHITECTURE.md). Glossário de domínio: [`CONTEXT.md`](CONTEXT.md).
