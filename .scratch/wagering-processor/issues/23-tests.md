@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 Blocked by: 16, 19, 20, 21, 22
 
 # Integration + concurrency tests (real PostgreSQL and MiniStack)

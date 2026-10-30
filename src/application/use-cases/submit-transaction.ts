@@ -101,7 +101,15 @@ export class SubmitTransaction {
           );
         }
 
-        // 2. Idempotency — serialized by the wallet lock below for same-wallet requests.
+        // 2. Wallet lock — the concurrency unit (§5). Locking first serializes
+        //    same-wallet (and thus same-idempotency-key) requests, so the
+        //    idempotency check below is race-safe under concurrent redelivery.
+        const wallet = await this.wallets.findForUpdate(cmd.walletId);
+        if (!wallet) {
+          throw new WalletNotFoundError(cmd.walletId);
+        }
+
+        // 3. Idempotency — inside the wallet lock.
         const existing = await this.transactions.findByIdempotencyKey(cmd.idempotencyKey);
         if (existing) {
           if (!existing.matchesPayload(cmd.payloadHash)) {
@@ -109,12 +117,6 @@ export class SubmitTransaction {
           }
           this.metrics.counter("idempotent_replays");
           return this.replayResult(existing);
-        }
-
-        // 3. Wallet lock — the concurrency unit (§5).
-        const wallet = await this.wallets.findForUpdate(cmd.walletId);
-        if (!wallet) {
-          throw new WalletNotFoundError(cmd.walletId);
         }
 
         const tx = WagerTransaction.create({

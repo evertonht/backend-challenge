@@ -8,13 +8,13 @@ import { EntityManagerContext } from "../entity-manager-context";
 import { WalletLedgerEntryEntity } from "../entities/ledger-entry.entity";
 import { entryToData, entryToDomain } from "../mappers";
 
-function encodeCursor(createdAt: Date, id: string): string {
-  return Buffer.from(JSON.stringify({ c: createdAt.toISOString(), i: id })).toString("base64url");
+function encodeCursor(createdAt: string, id: string): string {
+  return Buffer.from(JSON.stringify({ c: createdAt, i: id })).toString("base64url");
 }
 
-function decodeCursor(cursor: string): { createdAt: Date; id: string } {
+function decodeCursor(cursor: string): { createdAt: string; id: string } {
   const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { c: string; i: string };
-  return { createdAt: new Date(parsed.c), id: parsed.i };
+  return { createdAt: parsed.c, id: parsed.i };
 }
 
 interface LedgerRow {
@@ -61,6 +61,7 @@ export class MikroOrmLedgerEntryRepository extends LedgerEntryRepository {
 
   async page(walletId: string, cursor: string | undefined, limit: number): Promise<LedgerPage> {
     const conn = this.em.getConnection();
+    const fetchLimit = limit + 1;
     let rows: LedgerRow[];
     if (cursor) {
       const { createdAt, id } = decodeCursor(cursor);
@@ -69,7 +70,7 @@ export class MikroOrmLedgerEntryRepository extends LedgerEntryRepository {
          WHERE wallet_id = ? AND (created_at > ? OR (created_at = ? AND id::text > ?))
          ORDER BY created_at ASC, id::text ASC
          LIMIT ?`,
-        [walletId, createdAt, createdAt, id, limit],
+        [walletId, createdAt, createdAt, id, fetchLimit],
       );
     } else {
       rows = await conn.execute(
@@ -77,14 +78,15 @@ export class MikroOrmLedgerEntryRepository extends LedgerEntryRepository {
          WHERE wallet_id = ?
          ORDER BY created_at ASC, id::text ASC
          LIMIT ?`,
-        [walletId, limit],
+        [walletId, fetchLimit],
       );
     }
-    const entries = rows.map(rowToEntry);
-    const nextCursor =
-      rows.length === limit && entries.length > 0
-        ? encodeCursor(entries[entries.length - 1]!.createdAt, entries[entries.length - 1]!.id)
-        : null;
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const entries = pageRows.map(rowToEntry);
+    const nextCursor = hasMore
+      ? encodeCursor(String(pageRows[pageRows.length - 1]!.created_at), pageRows[pageRows.length - 1]!.id)
+      : null;
     return { entries, nextCursor };
   }
 
