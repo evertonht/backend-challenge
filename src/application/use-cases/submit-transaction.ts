@@ -193,7 +193,6 @@ export class SubmitTransaction {
     cmd: SubmitTransactionCommand,
     now: Date,
   ): Promise<SubmitTransactionResult> {
-    const ctx = this.eventContext(cmd, now);
     let entry: WalletLedgerEntry | undefined;
 
     try {
@@ -238,11 +237,13 @@ export class SubmitTransaction {
       await this.ledger.append(entry);
     }
 
+    // Each event gets its own fresh eventId (the outbox PK), so two events from
+    // the same operation never collide.
     await this.outbox.enqueue(
-      WagerTransactionProcessed.from(tx, tx.affectsBalance() ? balance : null, ctx),
+      WagerTransactionProcessed.from(tx, tx.affectsBalance() ? balance : null, this.eventContext(cmd, now)),
     );
     if (entry && !entry.balanceBefore.equals(entry.balanceAfter)) {
-      await this.outbox.enqueue(WalletBalanceChanged.from(wallet, entry, ctx));
+      await this.outbox.enqueue(WalletBalanceChanged.from(wallet, entry, this.eventContext(cmd, now)));
     }
 
     this.metrics.counter("transactions", { status: "PROCESSED", kind: tx.kind });

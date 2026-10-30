@@ -180,6 +180,19 @@ describe("use case flows", () => {
     expect(second.balance).toEqual(first.balance);
   });
 
+  test("a BET emits both WagerTransactionProcessed and WalletBalanceChanged", async () => {
+    const w = await openWallet("100.00");
+    await env.submitTransaction.execute(cmd({ walletId: w.id, kind: WagerTransactionKind.Bet, money: Money.from({ amount: "25.00", currency: "BRL" }) }));
+    const rows = await env.orm.em
+      .fork()
+      .getConnection()
+      .execute(`SELECT event_type, count(*)::int AS n FROM outbox_message GROUP BY event_type ORDER BY event_type`);
+    const byType: Record<string, number> = {};
+    for (const r of rows) byType[r.event_type as string] = r.n as number;
+    expect(byType.WagerTransactionProcessed).toBeGreaterThanOrEqual(1);
+    expect(byType.WalletBalanceChanged).toBeGreaterThanOrEqual(1);
+  });
+
   test("ledger pagination with a stable cursor", async () => {
     const w = await openWallet("100.00");
     for (let i = 1; i <= 5; i++) {

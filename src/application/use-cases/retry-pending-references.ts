@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { WagerTransaction } from "../../domain/wager-transaction";
 import { Wallet } from "../../domain/wallet";
 import { WalletLedgerEntry } from "../../domain/ledger-entry";
-import { WagerTransactionRejected, WalletBalanceChanged, EventContext } from "../../domain/events";
+import { WagerTransactionProcessed, WagerTransactionRejected, WalletBalanceChanged, EventContext } from "../../domain/events";
 import { LedgerDirection, WagerTransactionStatus } from "../../domain/enums";
 import { FailureCode } from "../../domain/failure-code";
 import { ReversalWouldOverdrawError } from "../../domain/errors";
@@ -104,9 +104,12 @@ export class RetryPendingReferences {
       await this.transactions.save(tx);
       if (entry) {
         await this.ledger.append(entry);
-        if (!entry.balanceBefore.equals(entry.balanceAfter)) {
-          await this.outbox.enqueue(WalletBalanceChanged.from(wallet, entry, this.ctx(tx, now)));
-        }
+      }
+
+      // Fresh eventId per event (the outbox PK) so they never collide.
+      await this.outbox.enqueue(WagerTransactionProcessed.from(tx, wallet.balance, this.ctx(tx, now)));
+      if (entry && !entry.balanceBefore.equals(entry.balanceAfter)) {
+        await this.outbox.enqueue(WalletBalanceChanged.from(wallet, entry, this.ctx(tx, now)));
       }
       this.metrics.counter("pending_reference_resolved");
       this.logger.info({ transactionId: tx.id, walletId: wallet.id }, "pending reference applied");
