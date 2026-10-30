@@ -172,34 +172,12 @@ export class SubmitTransaction {
       return { kind: "pending" };
     }
 
-    // Same provider (by lookup), player, wallet, currency, round (§7.2).
-    if (
-      ref.playerId !== cmd.playerId ||
-      ref.walletId !== cmd.walletId ||
-      ref.money.currency !== cmd.money.currency ||
-      ref.roundId !== cmd.roundId
-    ) {
-      return { kind: "rejected", code: FailureCode.ReferenceScopeMismatch };
+    const validationCode = tx.validateReference(ref);
+    if (validationCode) {
+      return { kind: "rejected", code: validationCode };
     }
 
-    // REFUND only references BET; ROLLBACK references BET/WIN/REFUND (§7.3).
-    if (tx.kind === WagerTransactionKind.Refund) {
-      if (ref.kind !== WagerTransactionKind.Bet) {
-        return { kind: "rejected", code: FailureCode.ReferenceInvalidKind };
-      }
-    } else {
-      const allowed = [WagerTransactionKind.Bet, WagerTransactionKind.Win, WagerTransactionKind.Refund];
-      if (!allowed.includes(ref.kind)) {
-        return { kind: "rejected", code: FailureCode.ReferenceInvalidKind };
-      }
-    }
-
-    // Reversal value must equal the reference value (§7.5).
-    if (!ref.money.equals(cmd.money)) {
-      return { kind: "rejected", code: FailureCode.ReferenceValueMismatch };
-    }
-
-    // At most one reversal per reference — prevents double credit/debit.
+    // At most one reversal per reference — prevents double credit/debit (§7.4).
     const alreadyReversed = await this.transactions.findProcessedReversal(cmd.providerId, externalId);
     if (alreadyReversed) {
       return { kind: "rejected", code: FailureCode.ReferenceAlreadyReversed };
@@ -263,7 +241,7 @@ export class SubmitTransaction {
     await this.outbox.enqueue(
       WagerTransactionProcessed.from(tx, tx.affectsBalance() ? balance : null, ctx),
     );
-    if (entry) {
+    if (entry && !entry.balanceBefore.equals(entry.balanceAfter)) {
       await this.outbox.enqueue(WalletBalanceChanged.from(wallet, entry, ctx));
     }
 

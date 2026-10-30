@@ -269,6 +269,32 @@ export class WagerTransaction {
     }
   }
 
+  /**
+   * Validates a resolved reversal reference against §7.2–7.5 (scope, kind, value).
+   * The "already reversed" rule (§7.4) is a persistence check done by the caller.
+   */
+  validateReference(reference: WagerTransaction): FailureCode | null {
+    if (
+      reference.playerId !== this.playerId ||
+      reference.walletId !== this.walletId ||
+      reference.money.currency !== this.money.currency ||
+      reference.roundId !== this.roundId
+    ) {
+      return FailureCode.ReferenceScopeMismatch;
+    }
+    if (this.kind === WagerTransactionKind.Refund) {
+      if (reference.kind !== WagerTransactionKind.Bet) {
+        return FailureCode.ReferenceInvalidKind;
+      }
+    } else if (![WagerTransactionKind.Bet, WagerTransactionKind.Win, WagerTransactionKind.Refund].includes(reference.kind)) {
+      return FailureCode.ReferenceInvalidKind;
+    }
+    if (!reference.money.equals(this.money)) {
+      return FailureCode.ReferenceValueMismatch;
+    }
+    return null;
+  }
+
   // ---- pending-reference retry bookkeeping ----
   isReferenceRetryDue(now: Date): boolean {
     return this._status === WagerTransactionStatus.PendingReference && this._nextAttemptAt !== undefined && this._nextAttemptAt.getTime() <= now.getTime();

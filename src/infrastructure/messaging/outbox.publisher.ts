@@ -1,7 +1,9 @@
 import { Injectable, OnApplicationShutdown, OnModuleInit } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { MikroORM, LockMode } from "@mikro-orm/core";
 import { SqsClient } from "./sqs.client";
 import { OutboxMessageEntity } from "../persistence/entities/outbox-message.entity";
+import { OUTBOX_MAX_ATTEMPTS } from "../../domain/outbox-message";
 import { Logger } from "../../observability/logger";
 import { Metrics } from "../../observability/metrics";
 
@@ -27,6 +29,7 @@ export class OutboxPublisher implements OnModuleInit, OnApplicationShutdown {
     private readonly sqs: SqsClient,
     private readonly logger: Logger,
     private readonly metrics: Metrics,
+    private readonly config: ConfigService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -39,6 +42,7 @@ export class OutboxPublisher implements OnModuleInit, OnApplicationShutdown {
   }
 
   private async loop(): Promise<void> {
+    const interval = this.config.get<number>("workers.outboxPollIntervalMs") ?? 2000;
     while (this.running) {
       try {
         const published = await this.publishBatch();
@@ -49,7 +53,7 @@ export class OutboxPublisher implements OnModuleInit, OnApplicationShutdown {
         this.logger.error("outbox publish batch failed", String(err));
       }
       this.metrics.gauge("outbox_lag", await this.pendingCount().catch(() => -1));
-      await this.sleep(2000);
+      await this.sleep(interval);
     }
   }
 
@@ -76,7 +80,7 @@ export class OutboxPublisher implements OnModuleInit, OnApplicationShutdown {
     return em.transactional(async (txEm) => {
       const rows = await txEm.find(
         OutboxMessageEntity,
-        { publishedAt: null, $or: [{ nextAttemptAt: null }, { nextAttemptAt: { $lte: now } }] },
+        { publishedAt: null, attempts: { $lt: OUTBOX_MAX_ATTEMPTS }, $or: [{ nextAttemptAt: null }, { nextAttemptAt: { $lte: now } }] },
         { limit, orderBy: { nextAttemptAt: "ASC" }, lockMode: LockMode.PESSIMISTIC_PARTIAL_WRITE },
       );
       const claimed: ClaimedRow[] = [];

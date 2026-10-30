@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { UniqueConstraintViolationException } from "@mikro-orm/core";
 import { Wallet } from "../../domain/wallet";
 import { WagerTransaction } from "../../domain/wager-transaction";
 import { WalletLedgerEntry } from "../../domain/ledger-entry";
@@ -41,11 +42,12 @@ export class OpenWallet {
   ) {}
 
   async execute(command: OpenWalletCommand): Promise<OpenWalletResult> {
-    return this.uow.transactional(async () => {
-      const existing = await this.wallets.findByPlayerCurrency(command.playerId, command.initialBalance.currency);
-      if (existing) {
-        throw new DuplicateWalletError(command.playerId, command.initialBalance.currency);
-      }
+    try {
+      return await this.uow.transactional(async () => {
+        const existing = await this.wallets.findByPlayerCurrency(command.playerId, command.initialBalance.currency);
+        if (existing) {
+          throw new DuplicateWalletError(command.playerId, command.initialBalance.currency);
+        }
 
       const id = this.ids.nextId();
       const wallet = Wallet.open({ id, playerId: command.playerId, initialBalance: command.initialBalance });
@@ -81,5 +83,16 @@ export class OpenWallet {
         version: wallet.version,
       };
     });
+    } catch (err) {
+      // Concurrent duplicate (playerId, currency): the check-then-insert races and
+      // the UNIQUE constraint is the backstop — surface it as a 409 conflict.
+      if (
+        err instanceof UniqueConstraintViolationException &&
+        (err as { constraint?: string }).constraint === "wallet_player_currency_unique"
+      ) {
+        throw new DuplicateWalletError(command.playerId, command.initialBalance.currency);
+      }
+      throw err;
+    }
   }
 }

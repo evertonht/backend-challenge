@@ -90,7 +90,20 @@ export class Migration20260101000000 extends Migration {
       );
       CREATE INDEX outbox_pending_idx ON outbox_message (next_attempt_at) WHERE published_at IS NULL;
 
-      -- Ledger immutability: the application role may only SELECT + INSERT.
+      -- Ledger immutability (§5.9): the application role may only SELECT + INSERT
+      -- on the ledger (no UPDATE/DELETE, no trigger). The DBA runs as the table
+      -- owner; the service runs under the wagering_app role.
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'wagering_app') THEN
+          CREATE ROLE wagering_app;
+        END IF;
+      END $$;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON wallet TO wagering_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON wager_transaction TO wagering_app;
+      GRANT SELECT, INSERT ON wallet_ledger_entry TO wagering_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON inbox_message TO wagering_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON outbox_message TO wagering_app;
       REVOKE UPDATE, DELETE ON wallet_ledger_entry FROM PUBLIC;
     `);
   }

@@ -113,6 +113,23 @@ describe("schema constraints", () => {
         ),
     ).rejects.toThrow(/ledger_arithmetic_check/);
   });
+  test("ledger is append-only for the application role (no UPDATE/DELETE)", async () => {
+    const w = await openWallet("10.00");
+    const conn = env.orm.em.fork().getConnection();
+    await conn.execute("SET ROLE wagering_app");
+    try {
+      await expect(
+        conn.execute("UPDATE wallet_ledger_entry SET amount = '99.00' WHERE wallet_id = ?", [w.id]),
+      ).rejects.toThrow(/permission denied/);
+      await expect(
+        conn.execute("DELETE FROM wallet_ledger_entry WHERE wallet_id = ?", [w.id]),
+      ).rejects.toThrow(/permission denied/);
+      // SELECT and INSERT remain allowed
+      await expect(conn.execute("SELECT count(*) FROM wallet_ledger_entry")).resolves.toBeTruthy();
+    } finally {
+      await conn.execute("RESET ROLE");
+    }
+  });
 });
 
 describe("use case flows", () => {
@@ -198,6 +215,27 @@ describe("out-of-order reversals", () => {
     await env.retryPendingReferences.execute(10);
 
     const rec = await env.reconcile.execute(w.id);
+    expect(rec?.calculatedBalance).toEqual({ amount: "100.00", currency: "BRL" });
+    expect(rec?.consistent).toBe(true);
+  });
+
+  test("a parked reversal is NOT double-applied if another reversal already processed", async () => {
+    const w = await openWallet("100.00");
+    // REFUND-A arrives before the BET → parked
+    await env.submitTransaction.execute(cmd({ walletId: w.id, externalTransactionId: "ref-a", idempotencyKey: "a:ref-a", kind: WagerTransactionKind.Refund, referenceExternalTransactionId: "bet-1", money: Money.from({ amount: "30.00", currency: "BRL" }) }));
+    // the BET arrives
+    await env.submitTransaction.execute(cmd({ walletId: w.id, externalTransactionId: "bet-1", idempotencyKey: "a:bet-1", kind: WagerTransactionKind.Bet, money: Money.from({ amount: "30.00", currency: "BRL" }) }));
+    // a second, direct REFUND processes first
+    await env.submitTransaction.execute(cmd({ walletId: w.id, externalTransactionId: "ref-b", idempotencyKey: "a:ref-b", kind: WagerTransactionKind.Refund, referenceExternalTransactionId: "bet-1", money: Money.from({ amount: "30.00", currency: "BRL" }) }));
+
+    await env.orm.em
+      .fork()
+      .getConnection()
+      .execute(`UPDATE wager_transaction SET next_attempt_at = now() - interval '1 second' WHERE status = 'PENDING_REFERENCE'`);
+    await env.retryPendingReferences.execute(10);
+
+    const rec = await env.reconcile.execute(w.id);
+    // 100 - 30 (bet) + 30 (refund-b) = 100; ref-a must NOT add another 30
     expect(rec?.calculatedBalance).toEqual({ amount: "100.00", currency: "BRL" });
     expect(rec?.consistent).toBe(true);
   });

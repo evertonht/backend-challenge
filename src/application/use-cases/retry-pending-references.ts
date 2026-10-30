@@ -76,9 +76,21 @@ export class RetryPendingReferences {
         return;
       }
 
-      const code = this.validateReference(tx, ref);
+      const code = tx.validateReference(ref);
       if (code) {
         tx.reject(code);
+        await this.transactions.save(tx);
+        await this.outbox.enqueue(WagerTransactionRejected.from(tx, this.ctx(tx, now)));
+        return;
+      }
+
+      // At most one reversal per reference — prevents double credit/debit (§7.4).
+      const alreadyReversed = await this.transactions.findProcessedReversal(
+        tx.providerId,
+        tx.referenceExternalTransactionId as string,
+      );
+      if (alreadyReversed) {
+        tx.reject(FailureCode.ReferenceAlreadyReversed);
         await this.transactions.save(tx);
         await this.outbox.enqueue(WagerTransactionRejected.from(tx, this.ctx(tx, now)));
         return;
@@ -92,29 +104,13 @@ export class RetryPendingReferences {
       await this.transactions.save(tx);
       if (entry) {
         await this.ledger.append(entry);
-        await this.outbox.enqueue(WalletBalanceChanged.from(wallet, entry, this.ctx(tx, now)));
+        if (!entry.balanceBefore.equals(entry.balanceAfter)) {
+          await this.outbox.enqueue(WalletBalanceChanged.from(wallet, entry, this.ctx(tx, now)));
+        }
       }
       this.metrics.counter("pending_reference_resolved");
       this.logger.info({ transactionId: tx.id, walletId: wallet.id }, "pending reference applied");
     });
-  }
-
-  private validateReference(tx: WagerTransaction, ref: WagerTransaction): FailureCode | null {
-    if (
-      ref.playerId !== tx.playerId ||
-      ref.walletId !== tx.walletId ||
-      ref.money.currency !== tx.money.currency ||
-      ref.roundId !== tx.roundId
-    ) {
-      return FailureCode.ReferenceScopeMismatch;
-    }
-    if (tx.kind === "REFUND") {
-      if (ref.kind !== "BET") return FailureCode.ReferenceInvalidKind;
-    } else if (!["BET", "WIN", "REFUND"].includes(ref.kind)) {
-      return FailureCode.ReferenceInvalidKind;
-    }
-    if (!ref.money.equals(tx.money)) return FailureCode.ReferenceValueMismatch;
-    return null;
   }
 
   private applyReversal(

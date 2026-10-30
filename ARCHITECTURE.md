@@ -143,6 +143,8 @@ Os cinco desfechos de §9 têm status HTTP **distintos e consistentes** em todos
 
 12 códigos estáveis e legíveis por máquina: `INVALID_PAYLOAD`, `IDEMPOTENCY_CONFLICT`, `WALLET_NOT_FOUND`, `CURRENCY_MISMATCH`, `INSUFFICIENT_BALANCE`, `REVERSAL_WOULD_OVERDRAW`, `REFERENCE_NOT_FOUND`, `REFERENCE_ALREADY_REVERSED`, `REFERENCE_VALUE_MISMATCH`, `REFERENCE_INVALID_KIND`, `REFERENCE_SCOPE_MISMATCH`, `REFERENCE_NOT_PROCESSED`. A distinção exigida por §7.9 (`INSUFFICIENT_BALANCE` × `REVERSAL_WOULD_OVERDRAW`) é honrada; os quatro `REFERENCE_*` de borda são interpretações documentadas (§7).
 
+> **Nota:** a criação de wallet duplicada usa `409` com o código `WALLET_ALREADY_EXISTS` — um conflito de *endpoint* (`POST /wallets`), distinto dos 12 `failureCode` de *rejeição de transação* (§7.2). O estado `FAILED` (§6.3) está definido no domínio mas não é produzido em runtime: erros permanentes de infra são rolados de volta e caem na DLQ (SQS) ou `503` (HTTP), em vez de persistir um `FAILED` (persistir um `FAILED` quando o próprio banco falha é circular).
+
 ### Cursor do ledger (§9)
 
 Paginação **keyset** sobre `(created_at, id)` (ascendente, `id` como desempate), cursor **opaco** base64url, consulta `WHERE wallet_id = ? AND (created_at, id) > (?, ?) ORDER BY created_at, id LIMIT 50`. Keyset (não OFFSET) para estabilidade sob inserts concorrentes.
