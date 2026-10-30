@@ -31,7 +31,7 @@ export class Reconcile {
     if (!wallet) {
       return null;
     }
-    const calculated = await this.ledger.sum(walletId);
+    const calculated = await this.ledger.sum(walletId, wallet.currency);
     const checkedEntries = await this.ledger.count(walletId);
     const stored = wallet.balance;
     const difference = stored.subtract(calculated);

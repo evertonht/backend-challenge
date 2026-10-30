@@ -55,10 +55,6 @@ export interface SubmitTransactionResult {
   idempotentReplay: boolean;
 }
 
-export type SubmitTransactionOutcome =
-  | { kind: "duplicate" } // inbox already processed (SQS redelivery) → ack
-  | { kind: "result"; result: SubmitTransactionResult };
-
 type ReferenceResolution =
   | { kind: "resolved"; reference: WagerTransaction }
   | { kind: "pending" }
@@ -83,16 +79,17 @@ export class SubmitTransaction {
     private readonly logger: Logger,
   ) {}
 
-  async execute(cmd: SubmitTransactionCommand): Promise<SubmitTransactionOutcome> {
+  async execute(cmd: SubmitTransactionCommand): Promise<SubmitTransactionResult> {
     const started = performance.now();
     try {
-      const outcome = await this.uow.transactional(async () => {
+      return await this.uow.transactional(async () => {
         const now = this.clock.now();
 
-        // 1. Inbox dedup (SQS path) — inserted in the same tx; UNIQUE(consumer, messageId)
-        //    guarantees at-most-once even under concurrent redelivery.
+        // 1. Inbox record (SQS path) — inserted in the same tx; UNIQUE(consumer, messageId)
+        //    guarantees at-most-once even under concurrent redelivery (a violation aborts
+        //    the tx and the consumer treats it as a transient redelivery).
         if (cmd.consumerName && cmd.messageId) {
-          const recorded = await this.inbox.record(
+          await this.inbox.record(
             InboxMessage.receive({
               messageId: cmd.messageId,
               consumerName: cmd.consumerName,
@@ -100,10 +97,6 @@ export class SubmitTransaction {
               receivedAt: now,
             }),
           );
-          if (!recorded) {
-            this.metrics.counter("inbox_duplicates", { consumer: cmd.consumerName });
-            return { kind: "duplicate" } as const;
-          }
         }
 
         // 2. Idempotency — serialized by the wallet lock below for same-wallet requests.
@@ -113,7 +106,7 @@ export class SubmitTransaction {
             throw new IdempotencyConflictError();
           }
           this.metrics.counter("idempotent_replays");
-          return { kind: "result", result: this.replayResult(existing) } as const;
+          return this.replayResult(existing);
         }
 
         // 3. Wallet lock — the concurrency unit (§5).
@@ -143,19 +136,17 @@ export class SubmitTransaction {
         if (tx.requiresReference()) {
           const resolution = await this.resolveReference(tx, cmd);
           if (resolution.kind === "pending") {
-            return { kind: "result", result: await this.parkPendingReference(tx, cmd, now) } as const;
+            return await this.parkPendingReference(tx, cmd, now);
           }
           if (resolution.kind === "rejected") {
-            return { kind: "result", result: await this.reject(tx, resolution.code, cmd, now) } as const;
+            return await this.reject(tx, resolution.code, cmd, now);
           }
           reference = resolution.reference;
         }
 
         // 5. Apply the financial change.
-        const result = await this.apply(tx, wallet, reference, cmd, now);
-        return { kind: "result", result } as const;
+        return await this.apply(tx, wallet, reference, cmd, now);
       });
-      return outcome;
     } finally {
       this.metrics.histogram("processing_latency_ms", performance.now() - started);
     }

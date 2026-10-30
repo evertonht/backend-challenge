@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 Blocked by: 16, 18, 19
 
 # Persistence (MikroORM entities, repositories, migrations)

@@ -107,8 +107,8 @@ class FakeLedgerRepository extends LedgerEntryRepository {
     const es = this.entries.filter((e) => e.walletId === walletId).slice(0, limit);
     return { entries: es, nextCursor: null };
   }
-  async sum(walletId: string) {
-    let total = Money.zero("BRL");
+  async sum(walletId: string, currency: string) {
+    let total = Money.zero(currency);
     for (const e of this.entries) {
       if (e.walletId !== walletId) continue;
       total = e.direction === LedgerDirection.Credit ? total.add(e.money) : total.subtract(e.money);
@@ -128,10 +128,7 @@ class FakeOutbox extends OutboxWriter {
 class FakeInbox extends InboxRepository {
   private readonly seen = new Set<string>();
   async record(message: InboxMessage) {
-    const key = `${message.consumerName}:${message.messageId}`;
-    if (this.seen.has(key)) return false;
-    this.seen.add(key);
-    return true;
+    this.seen.add(`${message.consumerName}:${message.messageId}`);
   }
   async exists(consumerName: string, messageId: string) {
     return this.seen.has(`${consumerName}:${messageId}`);
@@ -249,11 +246,9 @@ describe("SubmitTransaction", () => {
     const f = build();
     await openWallet(f, "100.00");
     const r = await f.submit.execute(cmd());
-    expect(r.kind).toBe("result");
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.Processed);
-    expect(r.result.balance).toEqual({ amount: "75.00", currency: "BRL" });
-    expect(r.result.idempotentReplay).toBe(false);
+    expect(r.status).toBe(WagerTransactionStatus.Processed);
+    expect(r.balance).toEqual({ amount: "75.00", currency: "BRL" });
+    expect(r.idempotentReplay).toBe(false);
     expect(f.ledger.entries).toHaveLength(2); // opening + bet
     expect(f.outbox.events.map((e) => e.eventType)).toContain("WagerTransactionProcessed");
     expect(f.outbox.events.map((e) => e.eventType)).toContain("WalletBalanceChanged");
@@ -263,10 +258,8 @@ describe("SubmitTransaction", () => {
     const f = build();
     await openWallet(f, "10.00");
     const r = await f.submit.execute(cmd({ money: brl("80.00") }));
-    expect(r.kind).toBe("result");
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.Rejected);
-    expect(r.result.failureCode).toBe(FailureCode.InsufficientBalance);
+    expect(r.status).toBe(WagerTransactionStatus.Rejected);
+    expect(r.failureCode).toBe(FailureCode.InsufficientBalance);
     expect(f.outbox.events.map((e) => e.eventType)).toContain("WagerTransactionRejected");
   });
 
@@ -274,18 +267,16 @@ describe("SubmitTransaction", () => {
     const f = build();
     await openWallet(f, "100.00");
     const r = await f.submit.execute(cmd({ kind: WagerTransactionKind.Win }));
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.Processed);
-    expect(r.result.balance).toEqual({ amount: "125.00", currency: "BRL" });
+    expect(r.status).toBe(WagerTransactionStatus.Processed);
+    expect(r.balance).toEqual({ amount: "125.00", currency: "BRL" });
   });
 
   test("LOSS records without moving balance or ledger", async () => {
     const f = build();
     await openWallet(f, "100.00");
     const r = await f.submit.execute(cmd({ kind: WagerTransactionKind.Loss }));
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.Processed);
-    expect(r.result.balance).toEqual({ amount: "100.00", currency: "BRL" });
+    expect(r.status).toBe(WagerTransactionStatus.Processed);
+    expect(r.balance).toEqual({ amount: "100.00", currency: "BRL" });
     expect(f.ledger.entries).toHaveLength(1); // only opening
     expect(f.outbox.events.map((e) => e.eventType)).toContain("WagerTransactionProcessed");
     expect(f.outbox.events.map((e) => e.eventType)).not.toContain("WalletBalanceChanged");
@@ -295,9 +286,8 @@ describe("SubmitTransaction", () => {
     const f = build();
     await openWallet(f, "100.00");
     const r = await f.submit.execute(cmd({ money: Money.from({ amount: "25.00", currency: "USD" }) }));
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.Rejected);
-    expect(r.result.failureCode).toBe(FailureCode.CurrencyMismatch);
+    expect(r.status).toBe(WagerTransactionStatus.Rejected);
+    expect(r.failureCode).toBe(FailureCode.CurrencyMismatch);
   });
 
   test("wallet not found throws WALLET_NOT_FOUND", async () => {
@@ -313,10 +303,9 @@ describe("SubmitTransaction", () => {
     const c = cmd();
     const first = await f.submit.execute(c);
     const second = await f.submit.execute(c);
-    if (second.kind !== "result" || first.kind !== "result") return;
-    expect(second.result.idempotentReplay).toBe(true);
-    expect(second.result.status).toBe(WagerTransactionStatus.Processed);
-    expect(second.result.balance).toEqual(first.result.balance);
+    expect(second.idempotentReplay).toBe(true);
+    expect(second.status).toBe(WagerTransactionStatus.Processed);
+    expect(second.balance).toEqual(first.balance);
     // no extra ledger entries from the replay
     expect(f.ledger.entries).toHaveLength(2);
   });
@@ -350,9 +339,8 @@ describe("SubmitTransaction — reversals", () => {
         referenceExternalTransactionId: extId,
       }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.Processed);
-    expect(r.result.balance).toEqual({ amount: "100.00", currency: "BRL" });
+    expect(r.status).toBe(WagerTransactionStatus.Processed);
+    expect(r.balance).toEqual({ amount: "100.00", currency: "BRL" });
   });
 
   test("REFUND of a missing reference is PENDING_REFERENCE", async () => {
@@ -364,8 +352,7 @@ describe("SubmitTransaction — reversals", () => {
         referenceExternalTransactionId: "does-not-exist",
       }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.PendingReference);
+    expect(r.status).toBe(WagerTransactionStatus.PendingReference);
     expect(f.outbox.events.map((e) => e.eventType)).toContain("WagerTransactionPendingReference");
   });
 
@@ -376,8 +363,7 @@ describe("SubmitTransaction — reversals", () => {
     const r = await f.submit.execute(
       cmd({ kind: WagerTransactionKind.Refund, referenceExternalTransactionId: "win-1" }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.failureCode).toBe(FailureCode.ReferenceInvalidKind);
+    expect(r.failureCode).toBe(FailureCode.ReferenceInvalidKind);
   });
 
   test("REFUND with wrong value is REFERENCE_VALUE_MISMATCH", async () => {
@@ -392,8 +378,7 @@ describe("SubmitTransaction — reversals", () => {
         referenceExternalTransactionId: extId,
       }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.failureCode).toBe(FailureCode.ReferenceValueMismatch);
+    expect(r.failureCode).toBe(FailureCode.ReferenceValueMismatch);
   });
 
   test("double REFUND is REFERENCE_ALREADY_REVERSED", async () => {
@@ -405,8 +390,7 @@ describe("SubmitTransaction — reversals", () => {
     const r = await f.submit.execute(
       cmd({ kind: WagerTransactionKind.Refund, referenceExternalTransactionId: extId, externalTransactionId: "r2", idempotencyKey: "provider-a:r2" }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.failureCode).toBe(FailureCode.ReferenceAlreadyReversed);
+    expect(r.failureCode).toBe(FailureCode.ReferenceAlreadyReversed);
   });
 
   test("REFUND scope mismatch (different wallet) is REFERENCE_SCOPE_MISMATCH", async () => {
@@ -424,8 +408,7 @@ describe("SubmitTransaction — reversals", () => {
         playerId: "p2",
       }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.failureCode).toBe(FailureCode.ReferenceScopeMismatch);
+    expect(r.failureCode).toBe(FailureCode.ReferenceScopeMismatch);
   });
 
   test("ROLLBACK of a WIN that would overdraw is REVERSAL_WOULD_OVERDRAW", async () => {
@@ -437,8 +420,7 @@ describe("SubmitTransaction — reversals", () => {
     const r = await f.submit.execute(
       cmd({ kind: WagerTransactionKind.Rollback, referenceExternalTransactionId: "win-1", money: brl("80.00") }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.failureCode).toBe(FailureCode.ReversalWouldOverdraw);
+    expect(r.failureCode).toBe(FailureCode.ReversalWouldOverdraw);
   });
 
   test("ROLLBACK of a BET credits it back", async () => {
@@ -452,21 +434,20 @@ describe("SubmitTransaction — reversals", () => {
         referenceExternalTransactionId: extId,
       }),
     );
-    if (r.kind !== "result") return;
-    expect(r.result.status).toBe(WagerTransactionStatus.Processed);
-    expect(r.result.balance).toEqual({ amount: "100.00", currency: "BRL" });
+    expect(r.status).toBe(WagerTransactionStatus.Processed);
+    expect(r.balance).toEqual({ amount: "100.00", currency: "BRL" });
   });
 });
 
 describe("SQS inbox dedup", () => {
-  test("second delivery of the same message is a duplicate", async () => {
+  test("the use case records the inbox and the consumer can detect redelivery", async () => {
     const f = build();
     await openWallet(f, "100.00");
     const c = cmd({ consumerName: "wager", messageId: "msg-1" });
-    const first = await f.submit.execute(c);
-    expect(first.kind).toBe("result");
-    const second = await f.submit.execute(c);
-    expect(second.kind).toBe("duplicate");
+    await f.submit.execute(c);
+    // the inbox now knows the message was processed → the consumer would ack and skip
+    expect(await f.inbox.exists("wager", "msg-1")).toBe(true);
+    expect(await f.inbox.exists("wager", "other")).toBe(false);
     expect(f.ledger.entries).toHaveLength(2); // opening + single bet
   });
 });
