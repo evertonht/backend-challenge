@@ -42,10 +42,10 @@ describe("WagerTransaction.create", () => {
 describe("WagerTransaction state machine", () => {
   test("PENDING → PROCESSED is terminal", () => {
     const t = base(WagerTransactionKind.Bet);
-    t.markProcessed(undefined, new Date());
+    t.markProcessed(undefined, undefined, new Date());
     expect(t.status).toBe(WagerTransactionStatus.Processed);
     expect(t.isTerminal()).toBe(true);
-    expect(() => t.markProcessed(undefined, new Date())).toThrow(InvalidTransactionStateError);
+    expect(() => t.markProcessed(undefined, undefined, new Date())).toThrow(InvalidTransactionStateError);
     expect(() => t.reject(FailureCode.InvalidPayload)).toThrow(InvalidTransactionStateError);
   });
 
@@ -55,7 +55,7 @@ describe("WagerTransaction state machine", () => {
     expect(t.status).toBe(WagerTransactionStatus.Rejected);
     expect(t.failureCode).toBe(FailureCode.InsufficientBalance);
     expect(t.isTerminal()).toBe(true);
-    expect(() => t.markProcessed(undefined, new Date())).toThrow(InvalidTransactionStateError);
+    expect(() => t.markProcessed(undefined, undefined, new Date())).toThrow(InvalidTransactionStateError);
   });
 
   test("PENDING → FAILED is terminal", () => {
@@ -69,7 +69,7 @@ describe("WagerTransaction state machine", () => {
     const t = base(WagerTransactionKind.Refund, { referenceExternalTransactionId: "ref-1" });
     t.markPendingReference(new Date());
     expect(t.status).toBe(WagerTransactionStatus.PendingReference);
-    t.markProcessed("ref-internal-id", new Date());
+    t.markProcessed("ref-internal-id", undefined, new Date());
     expect(t.status).toBe(WagerTransactionStatus.Processed);
     expect(t.referenceTransactionId).toBe("ref-internal-id");
   });

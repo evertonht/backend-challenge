@@ -73,6 +73,16 @@ export class IdempotencyConflictError extends BusinessRuleError {
   }
 }
 
+/** Duplicate wallet for the same (playerId, currency) — mapped to HTTP 409. */
+export class DuplicateWalletError extends DomainError {
+  constructor(
+    public readonly playerId: string,
+    public readonly currency: string,
+  ) {
+    super(`Wallet already exists for ${playerId}/${currency}`);
+  }
+}
+
 export class InvalidPayloadError extends BusinessRuleError {
   constructor(message = "Invalid payload") {
     super(FailureCode.InvalidPayload, message);

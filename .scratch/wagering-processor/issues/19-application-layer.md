@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 Blocked by: 16, 17, 18
 
 # Application layer (ports + use cases)

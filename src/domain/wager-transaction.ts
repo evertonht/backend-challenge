@@ -45,6 +45,7 @@ export interface WagerTransactionState {
   processedAt?: Date;
   attempts: number;
   nextAttemptAt?: Date;
+  balanceAfter?: MoneyProps;
 }
 
 /**
@@ -73,6 +74,7 @@ export class WagerTransaction {
     private _processedAt?: Date,
     private _attempts: number = 0,
     private _nextAttemptAt?: Date,
+    private _balanceAfter?: Money,
   ) {}
 
   static create(props: CreateWagerTransactionProps): WagerTransaction {
@@ -122,7 +124,42 @@ export class WagerTransaction {
       state.processedAt,
       state.attempts,
       state.nextAttemptAt,
+      state.balanceAfter ? Money.rehydrate(state.balanceAfter) : undefined,
     );
+  }
+
+  /**
+   * Internal OPENING transaction (§9): the wallet's initial credit. Created and
+   * applied atomically with the wallet — it is born PROCESSED, never submittable.
+   */
+  static opening(props: {
+    id: string;
+    walletId: string;
+    playerId: string;
+    money: Money;
+    balanceAfter: Money;
+    createdAt?: Date;
+  }): WagerTransaction {
+    const now = props.createdAt ?? new Date();
+    const tx = new WagerTransaction(
+      props.id,
+      "internal",
+      `opening:${props.walletId}`,
+      `opening:${props.walletId}`,
+      "",
+      props.walletId,
+      props.playerId,
+      "",
+      "",
+      WagerTransactionKind.Opening,
+      props.money,
+      undefined,
+      now,
+      WagerTransactionStatus.Processed,
+    );
+    tx._balanceAfter = props.balanceAfter;
+    tx._processedAt = now;
+    return tx;
   }
 
   get status(): WagerTransactionStatus {
@@ -149,11 +186,17 @@ export class WagerTransaction {
     return this._nextAttemptAt;
   }
 
+  /** Post-apply wallet balance observed at processing time (used for idempotent replay). */
+  get balanceAfter(): Money | undefined {
+    return this._balanceAfter;
+  }
+
   // ---- transitions (throw InvalidTransactionStateError on terminal state) ----
-  markProcessed(referenceTransactionId: string | undefined, at: Date): void {
+  markProcessed(referenceTransactionId: string | undefined, balanceAfter: Money | undefined, at: Date): void {
     this.assertNotTerminal();
     this._status = WagerTransactionStatus.Processed;
     this._referenceTransactionId = referenceTransactionId;
+    this._balanceAfter = balanceAfter;
     this._processedAt = at;
   }
 
