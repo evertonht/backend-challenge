@@ -5,6 +5,7 @@ import { GetWallet } from "./use-cases/get-wallet";
 import { GetTransaction } from "./use-cases/get-transaction";
 import { GetLedger } from "./use-cases/get-ledger";
 import { Reconcile } from "./use-cases/reconcile";
+import { RetryPendingReferences } from "./use-cases/retry-pending-references";
 
 /**
  * Application layer: use cases + port seams. The port abstract classes are the
@@ -12,7 +13,7 @@ import { Reconcile } from "./use-cases/reconcile";
  * module (ticket 20) and resolved here through Nest's injector.
  */
 @Module({
-  providers: [OpenWallet, SubmitTransaction, GetWallet, GetTransaction, GetLedger, Reconcile],
-  exports: [OpenWallet, SubmitTransaction, GetWallet, GetTransaction, GetLedger, Reconcile],
+  providers: [OpenWallet, SubmitTransaction, GetWallet, GetTransaction, GetLedger, Reconcile, RetryPendingReferences],
+  exports: [OpenWallet, SubmitTransaction, GetWallet, GetTransaction, GetLedger, Reconcile, RetryPendingReferences],
 })
 export class ApplicationModule {}

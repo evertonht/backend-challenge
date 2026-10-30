@@ -36,24 +36,25 @@ export class MikroOrmWagerTransactionRepository extends WagerTransactionReposito
   }
 
   async save(tx: WagerTransaction): Promise<void> {
-    const data = txToData(tx);
-    const managed = this.em.getUnitOfWork().getById(WagerTransactionEntity.name, tx.id) as
-      | WagerTransactionEntity
-      | undefined;
-    if (managed) {
-      this.em.assign(managed, data as never);
-    } else {
-      this.em.create(WagerTransactionEntity, data as never);
-    }
+    await this.em.upsert(WagerTransactionEntity, txToData(tx) as never);
   }
 
   async findDuePendingReferences(now: Date, limit: number): Promise<WagerTransaction[]> {
-    const entities = await this.em.find(
-      WagerTransactionEntity,
-      { status: WagerTransactionStatus.PendingReference, nextAttemptAt: { $lte: now } },
-      { limit, orderBy: { nextAttemptAt: "ASC" }, lockMode: LockMode.PESSIMISTIC_PARTIAL_WRITE },
-    );
-    return entities.map(txToDomain);
+    // Claim due rows with SKIP LOCKED in a short transaction so concurrent
+    // workers each take distinct rows; bump next_attempt_at to hide them.
+    const em = this.orm.em.fork();
+    return em.transactional(async (txEm) => {
+      const entities = await txEm.find(
+        WagerTransactionEntity,
+        { status: WagerTransactionStatus.PendingReference, nextAttemptAt: { $lte: now } },
+        { limit, orderBy: { nextAttemptAt: "ASC" }, lockMode: LockMode.PESSIMISTIC_PARTIAL_WRITE },
+      );
+      const future = new Date(now.getTime() + 30_000);
+      for (const e of entities) {
+        txEm.assign(e, { nextAttemptAt: future });
+      }
+      return entities.map(txToDomain);
+    });
   }
 
   async findProcessedReversal(

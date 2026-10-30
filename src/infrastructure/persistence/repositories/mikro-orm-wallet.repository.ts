@@ -35,13 +35,9 @@ export class MikroOrmWalletRepository extends WalletRepository {
   }
 
   async save(wallet: Wallet): Promise<void> {
-    // mapping boundary: the domain → persistence shape is constructed by the mapper.
+    // Upsert handles both new wallets (INSERT) and wallets mutated in this
+    // transaction or a previous one (UPDATE) uniformly.
     const data = walletToData(wallet);
-    const managed = this.em.getUnitOfWork().getById(WalletEntity.name, wallet.id) as WalletEntity | undefined;
-    if (managed) {
-      this.em.assign(managed, data as never);
-    } else {
-      this.em.create(WalletEntity, { id: wallet.id, createdAt: wallet.createdAt, ...data } as never);
-    }
+    await this.em.upsert(WalletEntity, { id: wallet.id, createdAt: wallet.createdAt, ...data } as never);
   }
 }

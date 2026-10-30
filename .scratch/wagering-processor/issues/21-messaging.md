@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 Blocked by: 16, 19, 20
 
 # Messaging (SQS inbox consumer, outbox publisher, pending-reference worker)
