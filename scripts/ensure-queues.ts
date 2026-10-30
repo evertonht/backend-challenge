@@ -65,7 +65,7 @@ export async function ensureQueues(config: QueueConfig = DEFAULT_QUEUE_CONFIG): 
 }
 
 // Standalone entrypoint.
-if (import.meta.url === Bun.main) {
+if (import.meta.main) {
   ensureQueues()
     .then((urls) => console.log("queues ready", urls))
     .catch((err) => {

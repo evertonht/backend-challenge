@@ -27,7 +27,7 @@ export class Migration20260101000000 extends Migration {
         external_transaction_id text NOT NULL,
         idempotency_key text NOT NULL,
         payload_hash text NOT NULL,
-        wallet_id uuid NOT NULL REFERENCES wallet (id),
+        wallet_id uuid NOT NULL REFERENCES wallet (id) DEFERRABLE INITIALLY DEFERRED,
         player_id text NOT NULL,
         round_id text NOT NULL,
         game_id text NOT NULL,
@@ -52,8 +52,8 @@ export class Migration20260101000000 extends Migration {
 
       CREATE TABLE wallet_ledger_entry (
         id uuid PRIMARY KEY,
-        wallet_id uuid NOT NULL REFERENCES wallet (id),
-        transaction_id uuid NOT NULL REFERENCES wager_transaction (id),
+        wallet_id uuid NOT NULL REFERENCES wallet (id) DEFERRABLE INITIALLY DEFERRED,
+        transaction_id uuid NOT NULL REFERENCES wager_transaction (id) DEFERRABLE INITIALLY DEFERRED,
         direction text NOT NULL,
         amount numeric(20,2) NOT NULL,
         currency text NOT NULL,

@@ -1,3 +1,4 @@
+import { Injectable } from "@nestjs/common";
 import { IdGenerator } from "../../application/ports/id-generator";
 
 /**
@@ -6,6 +7,7 @@ import { IdGenerator } from "../../application/ports/id-generator";
  * timestamp + 74 bits of randomness). Never `gen_random_uuid()` (v4) — the id
  * must be app-side and time-ordered for index locality and ledger cursors.
  */
+@Injectable()
 export class Uuidv7IdGenerator extends IdGenerator {
   nextId(): string {
     if (typeof Bun !== "undefined" && typeof (Bun as { randomUUIDv7?: () => string }).randomUUIDv7 === "function") {

@@ -1,3 +1,4 @@
+import { Injectable } from "@nestjs/common";
 import { MoneyProps } from "../../domain/money";
 import { Logger } from "../../observability/logger";
 import { Metrics } from "../../observability/metrics";
@@ -18,6 +19,7 @@ export interface ReconciliationResult {
  * summing the ledger (§9). Divergences are signalled, logged and counted —
  * never silently corrected.
  */
+@Injectable()
 export class Reconcile {
   constructor(
     private readonly wallets: WalletRepository,

@@ -1,6 +1,8 @@
+import { Injectable } from "@nestjs/common";
 import { LedgerEntryRepository, LedgerPage } from "../ports/ledger-entry-repository";
 import { WalletRepository } from "../ports/wallet-repository";
 
+@Injectable()
 export class GetLedger {
   constructor(
     private readonly ledger: LedgerEntryRepository,

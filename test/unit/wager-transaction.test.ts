@@ -3,7 +3,7 @@ import { WagerTransaction } from "../../src/domain/wager-transaction";
 import { LedgerDirection, WagerTransactionKind, WagerTransactionStatus } from "../../src/domain/enums";
 import { FailureCode } from "../../src/domain/failure-code";
 import { Money } from "../../src/domain/money";
-import { InvalidTransactionStateError } from "../../src/domain/errors";
+import { InvalidPayloadError, InvalidTransactionStateError } from "../../src/domain/errors";
 
 const brl = (amount: string) => Money.from({ amount, currency: "BRL" });
 
@@ -30,12 +30,12 @@ describe("WagerTransaction.create", () => {
   });
 
   test("REFUND and ROLLBACK require a reference", () => {
-    expect(() => base(WagerTransactionKind.Refund)).toThrow(InvalidTransactionStateError);
-    expect(() => base(WagerTransactionKind.Rollback)).toThrow(InvalidTransactionStateError);
+    expect(() => base(WagerTransactionKind.Refund)).toThrow(InvalidPayloadError);
+    expect(() => base(WagerTransactionKind.Rollback)).toThrow(InvalidPayloadError);
   });
 
   test("OPENING is not submittable", () => {
-    expect(() => base(WagerTransactionKind.Opening)).toThrow(InvalidTransactionStateError);
+    expect(() => base(WagerTransactionKind.Opening)).toThrow(InvalidPayloadError);
   });
 });
 

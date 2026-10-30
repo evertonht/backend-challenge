@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 Blocked by: 16, 19, 20
 
 # HTTP interface (controllers, DTOs, error mapping, health)

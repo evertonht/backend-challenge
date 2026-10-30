@@ -1,3 +1,4 @@
+import { Injectable } from "@nestjs/common";
 import { Wallet } from "../../domain/wallet";
 import { WagerTransaction } from "../../domain/wager-transaction";
 import { WalletLedgerEntry } from "../../domain/ledger-entry";
@@ -28,6 +29,7 @@ export interface OpenWalletResult {
  * writes an internal OPENING `WagerTransaction` + `CREDIT` ledger entry in the
  * same SQL transaction (§9), so the ledger is complete from the first cent.
  */
+@Injectable()
 export class OpenWallet {
   constructor(
     private readonly uow: UnitOfWork,

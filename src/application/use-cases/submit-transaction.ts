@@ -1,3 +1,4 @@
+import { Injectable } from "@nestjs/common";
 import { WagerTransaction } from "../../domain/wager-transaction";
 import { Wallet } from "../../domain/wallet";
 import { WalletLedgerEntry } from "../../domain/ledger-entry";
@@ -65,6 +66,7 @@ type ReferenceResolution =
  * transaction: inbox record, idempotency resolution, wallet lock, financial
  * change, ledger entry, transaction status, and outbox events are atomic (§11).
  */
+@Injectable()
 export class SubmitTransaction {
   constructor(
     private readonly uow: UnitOfWork,

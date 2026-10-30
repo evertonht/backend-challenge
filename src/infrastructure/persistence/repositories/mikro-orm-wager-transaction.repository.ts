@@ -1,3 +1,4 @@
+import { Injectable } from "@nestjs/common";
 import { LockMode, MikroORM } from "@mikro-orm/core";
 import { WagerTransactionRepository } from "../../../application/ports/wager-transaction-repository";
 import { WagerTransactionStatus } from "../../../domain/enums";
@@ -6,6 +7,7 @@ import { EntityManagerContext } from "../entity-manager-context";
 import { WagerTransactionEntity } from "../entities/wager-transaction.entity";
 import { txToData, txToDomain } from "../mappers";
 
+@Injectable()
 export class MikroOrmWagerTransactionRepository extends WagerTransactionRepository {
   constructor(
     private readonly orm: MikroORM,
@@ -15,7 +17,7 @@ export class MikroOrmWagerTransactionRepository extends WagerTransactionReposito
   }
 
   private get em() {
-    return this.ctx.current() ?? this.orm.em;
+    return this.ctx.current() ?? this.orm.em.fork();
   }
 
   async findById(id: string): Promise<WagerTransaction | null> {

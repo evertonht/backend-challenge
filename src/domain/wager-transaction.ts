@@ -1,6 +1,6 @@
 import { LedgerDirection, WagerTransactionKind, WagerTransactionStatus } from "./enums";
 import { FailureCode } from "./failure-code";
-import { InvalidTransactionStateError } from "./errors";
+import { InvalidPayloadError, InvalidTransactionStateError } from "./errors";
 import { Money, MoneyProps } from "./money";
 
 /** Pending-reference retry bookkeeping (build-time tuning constants, ticket 10). */
@@ -79,7 +79,7 @@ export class WagerTransaction {
 
   static create(props: CreateWagerTransactionProps): WagerTransaction {
     if (props.kind === WagerTransactionKind.Opening) {
-      throw new InvalidTransactionStateError("OPENING is internal and not submittable");
+      throw new InvalidPayloadError("OPENING is internal and not submittable");
     }
     const tx = new WagerTransaction(
       props.id,
@@ -98,7 +98,7 @@ export class WagerTransaction {
       WagerTransactionStatus.Pending,
     );
     if (tx.requiresReference() && !tx.referenceExternalTransactionId) {
-      throw new InvalidTransactionStateError(`${tx.kind} requires referenceExternalTransactionId`);
+      throw new InvalidPayloadError(`${tx.kind} requires referenceExternalTransactionId`);
     }
     return tx;
   }

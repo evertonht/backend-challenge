@@ -1,3 +1,4 @@
+import { Injectable } from "@nestjs/common";
 import { MikroORM } from "@mikro-orm/core";
 import { InboxRepository } from "../../../application/ports/inbox-repository";
 import { InboxMessage } from "../../../domain/inbox-message";
@@ -5,6 +6,7 @@ import { IdGenerator } from "../../../application/ports/id-generator";
 import { EntityManagerContext } from "../entity-manager-context";
 import { InboxMessageEntity } from "../entities/inbox-message.entity";
 
+@Injectable()
 export class MikroOrmInboxRepository extends InboxRepository {
   constructor(
     private readonly orm: MikroORM,
@@ -15,7 +17,7 @@ export class MikroOrmInboxRepository extends InboxRepository {
   }
 
   private get em() {
-    return this.ctx.current() ?? this.orm.em;
+    return this.ctx.current() ?? this.orm.em.fork();
   }
 
   async record(message: InboxMessage): Promise<void> {

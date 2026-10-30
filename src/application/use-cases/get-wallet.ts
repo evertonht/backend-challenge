@@ -1,6 +1,8 @@
+import { Injectable } from "@nestjs/common";
 import { Wallet } from "../../domain/wallet";
 import { WalletRepository } from "../ports/wallet-repository";
 
+@Injectable()
 export class GetWallet {
   constructor(private readonly wallets: WalletRepository) {}
 

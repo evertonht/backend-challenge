@@ -1,3 +1,4 @@
+import { Injectable } from "@nestjs/common";
 import { MikroORM } from "@mikro-orm/core";
 import { LedgerEntryRepository, LedgerPage } from "../../../application/ports/ledger-entry-repository";
 import { LedgerDirection } from "../../../domain/enums";
@@ -25,7 +26,7 @@ interface LedgerRow {
   currency: string;
   balance_before: string;
   balance_after: string;
-  created_at: Date;
+  created_at: Date | string;
 }
 
 function rowToEntry(row: LedgerRow): WalletLedgerEntry {
@@ -37,10 +38,11 @@ function rowToEntry(row: LedgerRow): WalletLedgerEntry {
     money: { amount: row.amount, currency: row.currency },
     balanceBefore: { amount: row.balance_before, currency: row.currency },
     balanceAfter: { amount: row.balance_after, currency: row.currency },
-    createdAt: row.created_at,
+    createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
   });
 }
 
+@Injectable()
 export class MikroOrmLedgerEntryRepository extends LedgerEntryRepository {
   constructor(
     private readonly orm: MikroORM,
@@ -50,7 +52,7 @@ export class MikroOrmLedgerEntryRepository extends LedgerEntryRepository {
   }
 
   private get em() {
-    return this.ctx.current() ?? this.orm.em;
+    return this.ctx.current() ?? this.orm.em.fork();
   }
 
   async append(entry: WalletLedgerEntry): Promise<void> {
