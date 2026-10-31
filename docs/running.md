@@ -60,6 +60,12 @@ Idempotently creates `wager-transactions.fifo`, its DLQ `wager-transactions-dlq.
 bun run migration:up
 ```
 
+The `migration:*` scripts run the MikroORM CLI under Bun (`bunx --bun mikro-orm`), so
+the TypeScript config and `.ts` migrations load natively — no `ts-node`/`tsx` needed.
+The CLI ships in the `@mikro-orm/cli` dev dependency (installed by `bun install` above).
+Also available: `migration:down` (revert one) and `migration:create` (generate a new
+migration from the schema diff).
+
 ## 6. Run the service
 
 ```bash

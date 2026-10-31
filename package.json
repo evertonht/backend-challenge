@@ -11,9 +11,9 @@
     "test:integration": "bun test test/integration",
     "test:concurrency": "bun test test/concurrency",
     "queues:ensure": "bun run scripts/ensure-queues.ts",
-    "migration:create": "bunx mikro-orm migration:create --config src/infrastructure/persistence/mikro-orm.config.ts",
-    "migration:up": "bunx mikro-orm migration:up --config src/infrastructure/persistence/mikro-orm.config.ts",
-    "migration:down": "bunx mikro-orm migration:down --config src/infrastructure/persistence/mikro-orm.config.ts"
+    "migration:create": "bunx --bun mikro-orm migration:create --config src/infrastructure/persistence/mikro-orm.config.ts",
+    "migration:up": "bunx --bun mikro-orm migration:up --config src/infrastructure/persistence/mikro-orm.config.ts",
+    "migration:down": "bunx --bun mikro-orm migration:down --config src/infrastructure/persistence/mikro-orm.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1161.0",
@@ -33,6 +33,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@mikro-orm/cli": "6",
     "@nestjs/cli": "^12.0.11",
     "@types/big.js": "^7.0.0",
     "@types/bun": "^1.4.4",
